@@ -1,0 +1,1885 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Seat Checker | Accenture</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- Libraries -->
+  <!-- jsPDF -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <!-- SheetJS (supports .xlsb) -->
+  <script src="//cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+  <style>
+    :root {
+      --bg-gradient: linear-gradient(135deg, #050008, #0b0016, #1b0030);
+      --card-bg: rgba(6, 6, 6, 0.96);
+      --accenture-purple: #a100ff;
+      --accent: var(--accenture-purple);
+      --accent-soft: rgba(161, 0, 255, 0.2);
+      --danger: #f97373;
+      --text-main: #e5e7eb;
+      --text-muted: #9ca3af;
+      --border-subtle: rgba(148, 163, 184, 0.45);
+      --seat-available: #ffffff;
+      --seat-occupied: var(--accenture-purple);
+      --seat-checkedin: #22c55e;
+      --seat-border: rgba(148, 163, 184, 0.4);
+      --shadow-soft: 0 24px 60px rgba(0, 0, 0, 0.9);
+      --radius-lg: 18px;
+      --radius-xl: 24px;
+      --transition-fast: 160ms ease-out;
+      --transition-med: 220ms ease;
+      --blur-strong: blur(24px);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text",
+        "Inter", "Roboto", sans-serif;
+      min-height: 100vh;
+      background-image: var(--bg-gradient);
+      background-attachment: fixed;
+      color: var(--text-main);
+      display: flex;
+      justify-content: center;
+      align-items: stretch;
+      padding: 16px;
+    }
+
+    .app {
+      width: 100%;
+      max-width: 1240px;
+      margin: auto;
+      border-radius: var(--radius-xl);
+      background:
+        radial-gradient(circle at top left, rgba(161, 0, 255, 0.22), transparent 55%),
+        radial-gradient(circle at bottom right, rgba(161, 0, 255, 0.14), transparent 55%),
+        rgba(6, 6, 6, 0.96);
+      backdrop-filter: blur(28px);
+      box-shadow: var(--shadow-soft);
+      padding: 20px 18px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      border: 1px solid rgba(161, 0, 255, 0.4);
+    }
+
+    @media (min-width: 768px) {
+      .app { padding: 22px 22px 24px; gap: 18px; }
+    }
+
+    .app-header {
+      display: grid;
+      grid-template-columns: minmax(0, 2fr) minmax(0, 2.2fr) auto;
+      gap: 16px;
+      align-items: center;
+    }
+
+    @media (max-width: 960px) {
+      .app-header {
+        grid-template-columns: minmax(0, 1.5fr) minmax(0, 1.5fr);
+        grid-template-rows: auto auto;
+      }
+      .header-actions {
+        grid-column: 1 / -1;
+        justify-content: flex-start;
+        margin-top: 4px;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .app-header { grid-template-columns: minmax(0, 1fr); }
+      .header-actions { justify-content: stretch; flex-wrap: wrap; }
+    }
+
+    .brand { display: flex; align-items: center; gap: 12px; }
+
+    .logo {
+      width: 44px; height: 44px; border-radius: 18px;
+      background: radial-gradient(circle at 20% 20%, #a100ff, #4b0082);
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 800; letter-spacing: 0.04em; font-size: 16px;
+      color: white;
+      box-shadow: 0 16px 40px rgba(161, 0, 255, 0.8);
+    }
+
+    .title-area h1 {
+      font-size: 20px; letter-spacing: 0.32em;
+      text-transform: uppercase; color: #e5e7eb; margin-bottom: 2px;
+    }
+
+    .title-area p { font-size: 13px; color: var(--text-muted); }
+
+    .stats {
+      display: flex; justify-content: space-evenly; gap: 8px;
+      padding: 10px 10px; border-radius: var(--radius-lg);
+      background:
+        radial-gradient(circle at top left, rgba(161, 0, 255, 0.18), transparent 60%),
+        rgba(6, 6, 6, 0.98);
+      border: 1px solid rgba(148, 163, 184, 0.6);
+    }
+
+    @media (max-width: 640px) { .stats { justify-content: space-between; } }
+
+    .stat { display: flex; flex-direction: column; gap: 4px; min-width: 78px; }
+    .stat-label {
+      font-size: 11px; text-transform: uppercase;
+      letter-spacing: 0.12em; color: var(--text-muted);
+    }
+    .stat-value { font-size: 18px; font-weight: 700; }
+    .stat-value.accent { color: var(--accenture-purple); }
+
+    .header-actions { display: flex; justify-content: flex-end; align-items: center; gap: 8px; }
+
+    .btn {
+      border-radius: 999px;
+      border: 1px solid transparent;
+      padding: 8px 14px;
+      font-size: 13px;
+      font-weight: 500;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: transform var(--transition-fast), box-shadow var(--transition-fast),
+        background-color var(--transition-fast), border-color var(--transition-fast),
+        color var(--transition-fast), opacity var(--transition-fast);
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
+    }
+
+    .btn.primary {
+      background: linear-gradient(135deg, #a100ff, #d000ff);
+      color: #f9fafb;
+      box-shadow: 0 10px 26px rgba(161, 0, 255, 0.7);
+    }
+    .btn.primary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 14px 34px rgba(161, 0, 255, 0.85);
+    }
+
+    .btn.outline {
+      background: transparent;
+      border-color: rgba(148, 163, 184, 0.7);
+      color: #e5e7eb;
+    }
+    .btn.outline:hover {
+      background: rgba(15, 23, 42, 0.8);
+      transform: translateY(-1px);
+    }
+
+    .btn.danger {
+      background: linear-gradient(135deg, #f97373, #ef4444);
+      border-color: transparent;
+      color: #fee2e2;
+      box-shadow: 0 10px 24px rgba(239, 68, 68, 0.6);
+    }
+
+    .btn.small { padding: 6px 10px; font-size: 11px; }
+
+    .toolbar {
+      display: flex; flex-wrap: wrap; gap: 14px;
+      align-items: flex-start; justify-content: space-between;
+      padding: 12px 14px; border-radius: var(--radius-lg);
+      background: linear-gradient(120deg, rgba(5, 5, 5, 0.96), rgba(12, 0, 30, 0.96)), var(--accent-soft);
+      border: 1px solid rgba(148, 163, 184, 0.6);
+    }
+
+    .search-area {
+      flex: 1 1 210px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .search-area label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.16em;
+      color: var(--text-muted);
+    }
+
+    .search-input-wrapper { display: flex; align-items: center; gap: 8px; }
+
+    .search-input-wrapper input {
+      flex: 1; min-width: 0;
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, 0.7);
+      padding: 8px 11px;
+      background: rgba(15, 23, 42, 0.85);
+      color: var(--text-main);
+      font-size: 13px;
+      outline: none;
+      transition: border-color var(--transition-fast), box-shadow var(--transition-fast),
+        background-color var(--transition-fast), transform var(--transition-fast);
+    }
+
+    .search-input-wrapper input::placeholder { color: rgba(148, 163, 184, 0.8); }
+
+    .search-input-wrapper input:focus {
+      border-color: var(--accenture-purple);
+      box-shadow: 0 0 0 1px rgba(161, 0, 255, 0.7);
+      transform: translateY(-0.5px);
+      background: rgba(15, 23, 42, 0.96);
+    }
+
+    .search-input-wrapper input.input-error {
+      border-color: var(--danger);
+      box-shadow: 0 0 0 1px rgba(248, 113, 113, 0.7);
+    }
+
+    input[type="time"]::-webkit-calendar-picker-indicator { filter: invert(0.85); cursor: pointer; }
+
+    .search-area .hint { font-size: 11px; color: var(--text-muted); opacity: 0.9; }
+
+    .legend {
+      display: inline-flex; flex-wrap: wrap;
+      align-items: center; gap: 8px;
+      padding: 8px 10px;
+      border-radius: 999px;
+      background: rgba(6, 6, 6, 0.96);
+      border: 1px dashed rgba(148, 163, 184, 0.6);
+    }
+
+    .legend-item { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-muted); }
+
+    .legend-color {
+      width: 14px; height: 14px;
+      border-radius: 5px;
+      border: 1px solid var(--seat-border);
+      box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.8);
+    }
+
+    .legend-color.available { background: var(--seat-available); }
+    .legend-color.occupied { background: var(--seat-occupied); }
+    .legend-color.checkedin { background: var(--seat-checkedin); }
+
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(0, 3fr) minmax(260px, 1.3fr);
+      gap: 18px;
+      min-height: 380px;
+    }
+    @media (max-width: 960px) { .layout { grid-template-columns: minmax(0, 1fr); } }
+
+    .grid-wrapper {
+      background: var(--card-bg);
+      border-radius: var(--radius-lg);
+      border: 1px solid rgba(148, 163, 184, 0.45);
+      padding: 12px 10px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      overflow: hidden;
+    }
+
+    .grid-header {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 0 4px 4px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .grid-header span strong { color: #e5e7eb; }
+
+    .seats-grid {
+      flex: 1;
+      overflow: auto;
+      padding: 4px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(34px, 1fr));
+      gap: 6px;
+      scroll-behavior: smooth;
+    }
+
+    @media (min-width: 900px) { .seats-grid { grid-template-columns: repeat(25, minmax(0, 1fr)); } }
+
+    .seat {
+      position: relative;
+      border-radius: 11px;
+      border: 1px solid var(--seat-border);
+      background: radial-gradient(circle at 30% 20%, #111827, #020617);
+      color: #f9fafb;
+      font-size: 11px;
+      font-weight: 600;
+      text-align: center;
+      padding: 6px 0;
+      cursor: pointer;
+      box-shadow: 0 7px 16px rgba(15, 23, 42, 0.35);
+      transition: transform var(--transition-med), box-shadow var(--transition-med),
+        background-color var(--transition-med), border-color var(--transition-med),
+        color var(--transition-med), opacity var(--transition-med),
+        outline-color var(--transition-med);
+      outline: 0 solid transparent;
+      user-select: none;
+    }
+
+    .seat:hover {
+      transform: translateY(-2px) scale(1.02);
+      box-shadow: 0 12px 26px rgba(15, 23, 42, 0.7);
+      border-color: rgba(161, 0, 255, 0.9);
+    }
+
+    .seat:active {
+      transform: translateY(0px) scale(0.99);
+      box-shadow: 0 6px 14px rgba(15, 23, 42, 0.7);
+    }
+
+    .seat.occupied {
+      background: radial-gradient(circle at 20% 10%, #a855f7, #a100ff);
+      color: #f9fafb;
+      border-color: rgba(161, 0, 255, 0.95);
+      box-shadow: 0 12px 28px rgba(161, 0, 255, 0.85);
+    }
+
+    .seat.occupied::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.3);
+      opacity: 0.7;
+      pointer-events: none;
+    }
+
+    .seat.checked-in {
+      background: radial-gradient(circle at 20% 10%, #22c55e, #15803d);
+      color: #f9fafb;
+      border-color: #22c55e;
+      box-shadow: 0 12px 28px rgba(34, 197, 94, 0.85);
+    }
+
+    .seat--highlight {
+      outline: 2px solid #facc15;
+      box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.9), 0 0 16px rgba(250, 204, 21, 0.8);
+      transform: translateY(-3px) scale(1.05);
+    }
+
+    .seat--hidden { display: none; }
+
+    .details-panel {
+      background:
+        radial-gradient(circle at top, rgba(161, 0, 255, 0.3), transparent 60%),
+        rgba(6, 6, 6, 0.98);
+      border-radius: var(--radius-lg);
+      border: 1px solid rgba(148, 163, 184, 0.6);
+      padding: 14px 14px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      box-shadow: 0 18px 40px rgba(15, 23, 42, 0.85);
+      min-height: 0;
+      opacity: 1;
+      transform: translateY(0px);
+      transition: opacity var(--transition-med), transform var(--transition-med);
+    }
+
+    @media (max-width: 960px) { .details-panel { min-height: 150px; } }
+
+    .details-panel.hidden { opacity: 0; transform: translateY(6px); pointer-events: none; }
+
+    .details-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .details-title { display: flex; flex-direction: column; gap: 2px; }
+    .details-title h2 {
+      font-size: 15px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: #e5e7eb;
+    }
+    .details-title p { font-size: 12px; color: var(--text-muted); }
+
+    .badge {
+      border-radius: 999px;
+      padding: 4px 9px;
+      font-size: 11px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border: 1px solid rgba(148, 163, 184, 0.8);
+      background: rgba(6, 6, 6, 0.96);
+      color: var(--text-muted);
+    }
+
+    .badge-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 999px;
+      background: #22c55e;
+      box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.9);
+    }
+
+    .detail-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      padding: 6px 8px;
+      border-radius: 10px;
+      background: rgba(6, 6, 6, 0.98);
+      border: 1px solid rgba(148, 163, 184, 0.5);
+    }
+
+    .detail-row strong { color: #e5e7eb; }
+
+    .status-pill {
+      border-radius: 999px;
+      padding: 4px 10px;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border: 1px solid;
+    }
+
+    .status-pill.available {
+      border-color: rgba(52, 211, 153, 0.85);
+      background: rgba(22, 163, 74, 0.15);
+      color: #bbf7d0;
+    }
+
+    .status-pill.occupied {
+      border-color: rgba(248, 113, 113, 0.9);
+      background: rgba(248, 113, 113, 0.15);
+      color: #fecaca;
+    }
+
+    .status-pill.checkedin {
+      border-color: rgba(34, 197, 94, 0.9);
+      background: rgba(34, 197, 94, 0.15);
+      color: #bbf7d0;
+    }
+
+    .details-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 4px;
+    }
+
+    .details-footer {
+      font-size: 11px;
+      color: var(--text-muted);
+      border-top: 1px dashed rgba(148, 163, 184, 0.6);
+      padding-top: 7px;
+      margin-top: 4px;
+      display: flex;
+      justify-content: space-between;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .booking-nav {
+      display: none;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .booking-nav-btn {
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, 0.7);
+      background: rgba(15, 23, 42, 0.9);
+      color: #e5e7eb;
+      padding: 2px 8px;
+      cursor: pointer;
+      font-size: 12px;
+      line-height: 1;
+    }
+    .booking-nav-btn:hover {
+      background: rgba(15, 23, 42, 1);
+      border-color: var(--accenture-purple);
+    }
+
+    .pdf-preview {
+      margin-top: 12px;
+      background:
+        radial-gradient(circle at top left, rgba(161, 0, 255, 0.16), transparent 60%),
+        rgba(6, 6, 6, 0.98);
+      border-radius: var(--radius-lg);
+      border: 1px solid rgba(148, 163, 184, 0.45);
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      height: 420px;
+    }
+    .pdf-preview.hidden { display: none; }
+
+    .pdf-preview-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .pdf-preview-frame {
+      flex: 1;
+      width: 100%;
+      border: none;
+      border-radius: 12px;
+      background: #020617;
+    }
+
+    .modal {
+      position: fixed;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      z-index: 40;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity var(--transition-med);
+    }
+
+    .modal.visible { opacity: 1; pointer-events: auto; }
+
+    .modal-backdrop {
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(circle at top, rgba(161, 0, 255, 0.32), transparent 55%),
+        rgba(0, 0, 0, 0.88);
+      backdrop-filter: blur(8px);
+    }
+
+    .modal-content {
+      position: relative;
+      z-index: 1;
+      width: 92%;
+      max-width: 360px;
+      border-radius: 20px;
+      background: rgba(6, 6, 6, 0.98);
+      border: 1px solid rgba(161, 0, 255, 0.6);
+      padding: 16px 16px 14px;
+      box-shadow: 0 22px 60px rgba(0, 0, 0, 0.9);
+      transform: translateY(10px);
+      transition: transform var(--transition-med);
+    }
+
+    .modal.visible .modal-content { transform: translateY(0); }
+
+    .modal-content h2 { font-size: 15px; margin-bottom: 4px; }
+    .modal-content p { font-size: 13px; color: var(--text-muted); margin-bottom: 10px; }
+
+    .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+
+    .note {
+      font-size: 11px;
+      color: #fbbf24;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .note-dot { width: 6px; height: 6px; border-radius: 999px; background: #fbbf24; }
+
+    .app-footer {
+      margin-top: 8px;
+      padding-top: 10px;
+      border-top: 1px solid rgba(148, 163, 184, 0.4);
+      text-align: center;
+      font-size: 11px;
+      color: var(--text-muted);
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="app">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="brand">
+        <div class="logo">SC</div>
+        <div class="title-area">
+          <h1>SEAT CHECKER</h1>
+          <p>Instant visibility into 550 seats — lock &amp; unlock in real time.</p>
+        </div>
+      </div>
+
+      <div class="stats">
+        <div class="stat">
+          <span class="stat-label">Total Seats</span>
+          <span class="stat-value" id="totalSeats">550</span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">Occupied</span>
+          <span class="stat-value accent" id="occupiedCount">0</span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">Available</span>
+          <span class="stat-value" id="availableCount">550</span>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <button class="btn primary" id="downloadPdfBtn">⬇️ Download PDF</button>
+        <button class="btn outline" id="viewPdfBtn">👁 View PDF</button>
+        <button class="btn outline danger" id="resetAllBtn" title="Admin only">🛠 Reset All</button>
+      </div>
+    </header>
+
+    <!-- Toolbar -->
+    <section class="toolbar">
+      <!-- Excel upload -->
+      <div class="search-area" style="max-width: 260px;">
+        <label for="excelFile">Upload Excel Binary (.xlsb)</label>
+        <div class="search-input-wrapper">
+          <input
+            type="file"
+            id="excelFile"
+            accept=".xlsb"
+            style="padding:6px 10px;border-radius:999px;border:1px solid rgba(148,163,184,0.7);background:rgba(15,23,42,0.85);color:#e5e7eb;font-size:12px;"
+          />
+        </div>
+        <p class="hint">
+          Reads <strong>"Details report"</strong> sheet.
+          Only <strong>FACILITY="CODC"</strong> and <strong>BOOKING STATUS="Successful"</strong> will be loaded.
+        </p>
+      </div>
+
+      <!-- Seat search -->
+      <div class="search-area">
+        <label for="seatSearch">Search seat number</label>
+        <div class="search-input-wrapper">
+          <input
+            type="number"
+            id="seatSearch"
+            min="1"
+            max="550"
+            placeholder="Type seat number… e.g. 120"
+          />
+          <button class="btn small primary" id="searchBtn">Search</button>
+        </div>
+        <p class="hint">Tip: hit <strong>Enter</strong> after typing a seat number.</p>
+      </div>
+
+      <!-- Time window + filter -->
+      <div class="search-area" style="max-width: 320px;">
+        <label>View time window</label>
+        <div style="display:flex; flex-direction:column; gap:8px;">
+          <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+            <div style="display:flex; flex-direction:column; gap:4px; flex:1 1 100px;">
+              <small style="font-size:11px; color:#9ca3af;">From</small>
+              <input
+                type="time"
+                id="viewStartTime"
+                value="08:00"
+                style="border-radius:999px;border:1px solid rgba(148,163,184,0.7);padding:6px 10px;background:rgba(15,23,42,0.85);color:#e5e7eb;font-size:12px;outline:none;"
+              />
+            </div>
+            <div style="display:flex; flex-direction:column; gap:4px; flex:1 1 100px;">
+              <small style="font-size:11px; color:#9ca3af;">To</small>
+              <input
+                type="time"
+                id="viewEndTime"
+                value="09:00"
+                style="border-radius:999px;border:1px solid rgba(148,163,184,0.7);padding:6px 10px;background:rgba(15,23,42,0.85);color:#e5e7eb;font-size:12px;outline:none;"
+              />
+            </div>
+          </div>
+
+          <div style="display:flex; flex-direction:column; gap:4px;">
+            <small style="font-size:11px; color:#9ca3af;">Filter by status</small>
+            <select
+              id="statusFilter"
+              style="border-radius:999px;border:1px solid rgba(148,163,184,0.7);padding:6px 10px;background:rgba(15,23,42,0.85);color:#e5e7eb;font-size:12px;outline:none;"
+            >
+              <option value="all">Show all seats</option>
+              <option value="locked">Show only locked</option>
+              <option value="available">Show only available</option>
+            </select>
+          </div>
+        </div>
+        <p class="hint">Seat status &amp; filtering are based on this time range.</p>
+      </div>
+
+      <!-- Legend -->
+      <div class="legend">
+        <span class="legend-item">
+          <span class="legend-color available"></span>
+          White = Available
+        </span>
+        <span class="legend-item">
+          <span class="legend-color occupied"></span>
+          Violet = Occupied
+        </span>
+        <span class="legend-item">
+          <span class="legend-color checkedin"></span>
+          Green = Checked-in
+        </span>
+      </div>
+    </section>
+
+    <!-- Main Layout -->
+    <main class="layout">
+      <!-- Grid -->
+      <section class="grid-wrapper">
+        <div class="grid-header">
+          <span><strong>Seat Grid</strong> · All 550 seats</span>
+          <span>Click a seat to view / manage bookings</span>
+        </div>
+        <div id="seatsGrid" class="seats-grid"></div>
+      </section>
+
+      <!-- Seat Details Panel -->
+      <aside id="seatDetailsPanel" class="details-panel hidden">
+        <div class="details-header">
+          <div class="details-title">
+            <h2>Seat Details</h2>
+            <p id="seatDetailsSubtitle">Search a seat to view details.</p>
+          </div>
+          <div class="badge">
+            <span class="badge-dot"></span>
+            Live status
+          </div>
+          <div id="bookingNav" class="booking-nav">
+            <button class="booking-nav-btn" id="bookingPrevBtn">‹</button>
+            <span id="bookingIndexLabel">1 / 1</span>
+            <button class="booking-nav-btn" id="bookingNextBtn">›</button>
+          </div>
+        </div>
+
+        <div class="detail-row">
+          <span>Seat Number</span>
+          <strong id="detailSeatNumber">—</strong>
+        </div>
+
+        <div class="detail-row">
+          <span>Name</span>
+          <strong id="detailEmpName">—</strong>
+        </div>
+
+        <div class="detail-row">
+          <span>Time</span>
+          <strong id="detailTime">—</strong>
+        </div>
+
+        <!-- NEW: Booking Status -->
+        <div class="detail-row">
+          <span>Booking Status</span>
+          <strong id="detailBookingStatus">—</strong>
+        </div>
+
+        <div class="detail-row">
+          <span>Status</span>
+          <span id="detailStatusPill" class="status-pill available">AVAILABLE</span>
+        </div>
+
+        <div class="details-actions">
+          <button class="btn small primary" id="lockSeatBtn">Lock Seat</button>
+          <button class="btn small outline" id="unlockSeatBtn">Unlock Seat</button>
+          <button class="btn small outline" id="checkInSeatBtn">Check-in</button>
+          <button class="btn small outline" id="backToGridBtn">Back</button>
+        </div>
+
+        <div class="details-footer">
+          <span>White = Available · Violet = Occupied · Green = Checked-in</span>
+          <small>Changes are auto-saved to this browser.</small>
+        </div>
+      </aside>
+    </main>
+
+    <!-- PDF Preview Section -->
+    <section id="pdfPreviewSection" class="pdf-preview hidden">
+      <div class="pdf-preview-header">
+        <span>PDF Preview</span>
+        <button class="btn small outline" id="closePdfPreviewBtn">Close</button>
+      </div>
+      <iframe id="pdfPreviewFrame" class="pdf-preview-frame"></iframe>
+    </section>
+
+    <footer class="app-footer">
+      © Accenture 2026
+    </footer>
+  </div>
+
+  <!-- Confirmation Modal -->
+  <div id="confirmModal" class="modal">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <h2 id="confirmTitle">Confirm action</h2>
+      <p id="confirmText">Are you sure?</p>
+      <div class="note">
+        <span class="note-dot"></span>
+        <span>This action will immediately update the seat status.</span>
+      </div>
+      <div class="modal-actions">
+        <button class="btn small outline" id="confirmNo">Cancel</button>
+        <button class="btn small danger" id="confirmYes">Yes</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Booking Modal -->
+  <div id="bookingModal" class="modal">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <h2 id="bookingTitle">Lock Seat</h2>
+      <p id="bookingText">Provide details to lock this seat.</p>
+
+      <form id="bookingForm">
+        <div style="display:flex; flex-direction:column; gap:8px; margin-top:6px;">
+          <div style="display:flex; flex-direction:column; gap:4px;">
+            <label for="empNameInput" style="font-size:12px; color:#e5e7eb;">
+              Name / Enterprise ID <span style="color:#f97373;">*</span>
+            </label>
+            <input
+              type="text"
+              id="empNameInput"
+              placeholder="Enter name / enterprise ID"
+              style="border-radius:10px;border:1px solid rgba(148,163,184,0.7);padding:7px 10px;background:rgba(15,23,42,0.9);color:#e5e7eb;font-size:13px;outline:none;"
+              required
+            />
+          </div>
+
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <div style="flex:1 1 100px; display:flex; flex-direction:column; gap:4px;">
+              <label for="slotStartInput" style="font-size:12px; color:#e5e7eb;">From</label>
+              <input
+                type="time"
+                id="slotStartInput"
+                required
+                style="border-radius:10px;border:1px solid rgba(148,163,184,0.7);padding:7px 10px;background:rgba(15,23,42,0.9);color:#e5e7eb;font-size:13px;outline:none;"
+              />
+            </div>
+            <div style="flex:1 1 100px; display:flex; flex-direction:column; gap:4px;">
+              <label for="slotEndInput" style="font-size:12px; color:#e5e7eb;">To</label>
+              <input
+                type="time"
+                id="slotEndInput"
+                required
+                style="border-radius:10px;border:1px solid rgba(148,163,184,0.7);padding:7px 10px;background:rgba(15,23,42,0.9);color:#e5e7eb;font-size:13px;outline:none;"
+              />
+            </div>
+          </div>
+        </div>
+      </form>
+
+      <div class="note" style="margin-top:8px;">
+        <span class="note-dot"></span>
+        <span>Seat will be locked only for the selected time slot.</span>
+      </div>
+
+      <div class="modal-actions">
+        <button class="btn small outline" type="button" id="bookingCancelBtn">Cancel</button>
+        <button class="btn small primary" type="button" id="bookingSaveBtn">Lock Seat</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Alert Modal -->
+  <div id="alertModal" class="modal">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <h2 id="alertTitle">Notice</h2>
+      <p id="alertText">Message</p>
+      <div class="modal-actions">
+        <button class="btn small primary" id="alertOkBtn">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      const TOTAL_SEATS = 550;
+      const GRID_COLUMNS = 25;
+      const STORAGE_KEY = "seatCheckerState";
+
+      const seatsGrid = document.getElementById("seatsGrid");
+      const totalSeatsEl = document.getElementById("totalSeats");
+      const occupiedCountEl = document.getElementById("occupiedCount");
+      const availableCountEl = document.getElementById("availableCount");
+
+      const seatSearchInput = document.getElementById("seatSearch");
+      const searchBtn = document.getElementById("searchBtn");
+      const downloadPdfBtn = document.getElementById("downloadPdfBtn");
+      const viewPdfBtn = document.getElementById("viewPdfBtn");
+      const resetAllBtn = document.getElementById("resetAllBtn");
+
+      const seatDetailsPanel = document.getElementById("seatDetailsPanel");
+      const seatDetailsSubtitle = document.getElementById("seatDetailsSubtitle");
+      const detailSeatNumberEl = document.getElementById("detailSeatNumber");
+      const detailEmpNameEl = document.getElementById("detailEmpName");
+      const detailTimeEl = document.getElementById("detailTime");
+      const detailBookingStatusEl = document.getElementById("detailBookingStatus"); // NEW
+      const detailStatusPill = document.getElementById("detailStatusPill");
+      const lockSeatBtn = document.getElementById("lockSeatBtn");
+      const unlockSeatBtn = document.getElementById("unlockSeatBtn");
+      const checkInSeatBtn = document.getElementById("checkInSeatBtn");
+      const backToGridBtn = document.getElementById("backToGridBtn");
+
+      const bookingNav = document.getElementById("bookingNav");
+      const bookingIndexLabel = document.getElementById("bookingIndexLabel");
+      const bookingPrevBtn = document.getElementById("bookingPrevBtn");
+      const bookingNextBtn = document.getElementById("bookingNextBtn");
+
+      const confirmModal = document.getElementById("confirmModal");
+      const confirmTitle = document.getElementById("confirmTitle");
+      const confirmText = document.getElementById("confirmText");
+      const confirmYes = document.getElementById("confirmYes");
+      const confirmNo = document.getElementById("confirmNo");
+
+      const viewStartInput = document.getElementById("viewStartTime");
+      const viewEndInput = document.getElementById("viewEndTime");
+      const statusFilterSelect = document.getElementById("statusFilter");
+
+      const bookingModal = document.getElementById("bookingModal");
+      const bookingTitle = document.getElementById("bookingTitle");
+      const bookingText = document.getElementById("bookingText");
+      const empNameInput = document.getElementById("empNameInput");
+      const slotStartInput = document.getElementById("slotStartInput");
+      const slotEndInput = document.getElementById("slotEndInput");
+      const bookingCancelBtn = document.getElementById("bookingCancelBtn");
+      const bookingSaveBtn = document.getElementById("bookingSaveBtn");
+
+      const pdfPreviewSection = document.getElementById("pdfPreviewSection");
+      const pdfPreviewFrame = document.getElementById("pdfPreviewFrame");
+      const closePdfPreviewBtn = document.getElementById("closePdfPreviewBtn");
+
+      const excelFileInput = document.getElementById("excelFile");
+
+      const alertModal = document.getElementById("alertModal");
+      const alertTitle = document.getElementById("alertTitle");
+      const alertText = document.getElementById("alertText");
+      const alertOkBtn = document.getElementById("alertOkBtn");
+
+      let bookings = [];
+      let currentDetailsSeat = null;
+      let confirmAction = null;
+
+      let viewStartTime = "08:00";
+      let viewEndTime = "09:00";
+      let statusFilter = "all";
+
+      let currentSeatBookings = [];
+      let currentSeatBookingIndex = 0;
+      let touchStartX = null;
+
+      // Alerts
+      function openAlert(title, text) {
+        alertTitle.textContent = title || "Notice";
+        alertText.textContent = text || "";
+        alertModal.classList.add("visible");
+      }
+      function closeAlert() { alertModal.classList.remove("visible"); }
+
+      alertOkBtn.addEventListener("click", closeAlert);
+      alertModal.addEventListener("click", (e) => {
+        if (e.target === alertModal || e.target.classList.contains("modal-backdrop")) {
+          closeAlert();
+        }
+      });
+
+      // Storage
+      function loadState() {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return;
+        try {
+          const data = JSON.parse(raw);
+          if (data && Array.isArray(data.bookings)) {
+            bookings = data.bookings.map((b) => ({
+              seatNumber: b.seatNumber,
+              empName: b.empName || "",
+              start: b.start || "00:00",
+              end: b.end || "23:59",
+              checkedIn: !!b.checkedIn,
+              bookingStatus: b.bookingStatus || "Manual", // NEW (backwards compatible)
+            }));
+          }
+        } catch (e) {
+          console.warn("Failed to parse seat state:", e);
+          bookings = [];
+        }
+      }
+      function saveState() {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({ bookings }));
+      }
+
+      // Time utils
+      function timeStrToMinutes(t) {
+        if (!t) return 0;
+        const [h, m] = t.split(":").map(Number);
+        return h * 60 + (m || 0);
+      }
+      function rangesOverlap(startA, endA, startB, endB) {
+        return startA < endB && startB < endA;
+      }
+
+      function isSeatOccupiedInView(seatNumber) {
+        const viewStart = timeStrToMinutes(viewStartTime);
+        const viewEnd = timeStrToMinutes(viewEndTime);
+        return bookings.some((b) => {
+          if (b.seatNumber !== seatNumber) return false;
+          const bs = timeStrToMinutes(b.start);
+          const be = timeStrToMinutes(b.end);
+          return rangesOverlap(viewStart, viewEnd, bs, be);
+        });
+      }
+
+      function isSeatCheckedInInView(seatNumber) {
+        const viewStart = timeStrToMinutes(viewStartTime);
+        const viewEnd = timeStrToMinutes(viewEndTime);
+        return bookings.some((b) => {
+          if (b.seatNumber !== seatNumber) return false;
+          if (!b.checkedIn) return false;
+          const bs = timeStrToMinutes(b.start);
+          const be = timeStrToMinutes(b.end);
+          return rangesOverlap(viewStart, viewEnd, bs, be);
+        });
+      }
+
+      function getOccupiedSeatSetForView() {
+        const viewStart = timeStrToMinutes(viewStartTime);
+        const viewEnd = timeStrToMinutes(viewEndTime);
+        const set = new Set();
+        bookings.forEach((b) => {
+          const bs = timeStrToMinutes(b.start);
+          const be = timeStrToMinutes(b.end);
+          if (rangesOverlap(viewStart, viewEnd, bs, be)) set.add(b.seatNumber);
+        });
+        return set;
+      }
+
+      function getCheckedInSeatSetForView() {
+        const viewStart = timeStrToMinutes(viewStartTime);
+        const viewEnd = timeStrToMinutes(viewEndTime);
+        const set = new Set();
+        bookings.forEach((b) => {
+          if (!b.checkedIn) return;
+          const bs = timeStrToMinutes(b.start);
+          const be = timeStrToMinutes(b.end);
+          if (rangesOverlap(viewStart, viewEnd, bs, be)) set.add(b.seatNumber);
+        });
+        return set;
+      }
+
+      function getBookingsForSeat(seatNumber) {
+        return bookings
+          .filter((b) => b.seatNumber === seatNumber)
+          .sort((a, b) => timeStrToMinutes(a.start) - timeStrToMinutes(b.start));
+      }
+
+      // UI helpers
+      function createSeatElement(seatNumber) {
+        const btn = document.createElement("button");
+        btn.className = "seat";
+        btn.dataset.seatNumber = seatNumber;
+        btn.textContent = seatNumber;
+
+        const occupied = isSeatOccupiedInView(seatNumber);
+        const checked = isSeatCheckedInInView(seatNumber);
+        if (occupied) btn.classList.add("occupied");
+        if (checked) btn.classList.add("checked-in");
+
+        btn.addEventListener("click", () => showDetailsPanel(seatNumber));
+        return btn;
+      }
+
+      function buildGrid() {
+        seatsGrid.innerHTML = "";
+        for (let i = 1; i <= TOTAL_SEATS; i++) seatsGrid.appendChild(createSeatElement(i));
+      }
+
+      function getSeatElement(seatNumber) {
+        return seatsGrid.querySelector('.seat[data-seat-number="' + seatNumber + '"]');
+      }
+
+      function updateSeatUI(seatNumber) {
+        const el = getSeatElement(seatNumber);
+        if (!el) return;
+
+        const occupied = isSeatOccupiedInView(seatNumber);
+        const checked = isSeatCheckedInInView(seatNumber);
+
+        el.classList.remove("occupied", "checked-in", "seat--hidden");
+        if (occupied) el.classList.add("occupied");
+        if (checked) el.classList.add("checked-in");
+
+        if (statusFilter === "locked" && !occupied) el.classList.add("seat--hidden");
+        else if (statusFilter === "available" && occupied) el.classList.add("seat--hidden");
+      }
+
+      function refreshAllSeatsUI() {
+        for (let i = 1; i <= TOTAL_SEATS; i++) updateSeatUI(i);
+      }
+
+      function updateStats() {
+        const occupiedSet = getOccupiedSeatSetForView();
+        const occupied = occupiedSet.size;
+        const available = TOTAL_SEATS - occupied;
+        occupiedCountEl.textContent = occupied;
+        availableCountEl.textContent = available;
+        totalSeatsEl.textContent = TOTAL_SEATS;
+      }
+
+      function renderSeatDetails() {
+        const seatNumber = currentDetailsSeat;
+        if (!seatNumber) return;
+
+        const hasBookings = currentSeatBookings.length > 0;
+        const booking =
+          hasBookings && currentSeatBookingIndex >= 0
+            ? currentSeatBookings[currentSeatBookingIndex]
+            : null;
+
+        detailSeatNumberEl.textContent = seatNumber;
+        detailEmpNameEl.textContent = booking?.empName || "—";
+        detailBookingStatusEl.textContent = booking?.bookingStatus || "—"; // NEW
+
+        if (hasBookings && booking) {
+          seatDetailsSubtitle.innerHTML =
+            `Booking ${currentSeatBookingIndex + 1} of ${currentSeatBookings.length} · ` +
+            `Locked from ${booking.start} to ${booking.end}` +
+            (booking.empName ? ` by <strong>${booking.empName}</strong>.` : ".");
+          detailTimeEl.textContent = `${booking.start} – ${booking.end}`;
+        } else {
+          seatDetailsSubtitle.textContent =
+            `Seat ${seatNumber} is available in the selected time window (${viewStartTime}–${viewEndTime}).`;
+          detailTimeEl.textContent = `${viewStartTime} – ${viewEndTime}`;
+        }
+
+        detailStatusPill.classList.remove("available", "occupied", "checkedin");
+        if (!hasBookings) {
+          detailStatusPill.textContent = "AVAILABLE";
+          detailStatusPill.classList.add("available");
+        } else if (booking) {
+          const overlapsCurrentView = rangesOverlap(
+            timeStrToMinutes(booking.start),
+            timeStrToMinutes(booking.end),
+            timeStrToMinutes(viewStartTime),
+            timeStrToMinutes(viewEndTime)
+          );
+          if (booking.checkedIn && overlapsCurrentView) {
+            detailStatusPill.textContent = "CHECKED-IN";
+            detailStatusPill.classList.add("checkedin");
+          } else if (overlapsCurrentView) {
+            detailStatusPill.textContent = "LOCKED";
+            detailStatusPill.classList.add("occupied");
+          } else {
+            detailStatusPill.textContent = "LOCKED (OUT OF VIEW)";
+            detailStatusPill.classList.add("occupied");
+          }
+        }
+
+        checkInSeatBtn.style.display = hasBookings ? "inline-flex" : "none";
+
+        if (currentSeatBookings.length > 1) {
+          bookingNav.style.display = "inline-flex";
+          bookingIndexLabel.textContent =
+            (currentSeatBookingIndex + 1) + " / " + currentSeatBookings.length;
+        } else {
+          bookingNav.style.display = "none";
+        }
+
+        seatDetailsPanel.classList.remove("hidden");
+      }
+
+      function showDetailsPanel(seatNumber) {
+        currentDetailsSeat = seatNumber;
+        currentSeatBookings = getBookingsForSeat(seatNumber);
+        currentSeatBookingIndex = 0;
+        renderSeatDetails();
+      }
+
+      function hideDetailsPanel() {
+        seatDetailsPanel.classList.add("hidden");
+        currentDetailsSeat = null;
+        currentSeatBookings = [];
+        currentSeatBookingIndex = 0;
+      }
+
+      function focusSeat(seatNumber) {
+        const el = getSeatElement(seatNumber);
+        if (!el) return;
+        el.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
+        el.classList.add("seat--highlight");
+        setTimeout(() => el.classList.remove("seat--highlight"), 1600);
+      }
+
+      function openConfirm({ title, text, onConfirm }) {
+        confirmTitle.textContent = title;
+        confirmText.textContent = text;
+        confirmAction = onConfirm;
+        confirmModal.classList.add("visible");
+      }
+
+      function closeConfirm() {
+        confirmModal.classList.remove("visible");
+        confirmAction = null;
+      }
+
+      function openBookingModal(seatNumber) {
+        currentDetailsSeat = seatNumber;
+        bookingTitle.textContent = `Lock Seat ${seatNumber}`;
+        bookingText.textContent = `Enter details to lock seat ${seatNumber} for a time slot.`;
+        slotStartInput.value = viewStartTime;
+        slotEndInput.value = viewEndTime;
+        empNameInput.value = "";
+        bookingModal.classList.add("visible");
+      }
+
+      function closeBookingModal() { bookingModal.classList.remove("visible"); }
+
+      function validateBookingForm() {
+        const empName = empNameInput.value.trim();
+        const start = slotStartInput.value;
+        const end = slotEndInput.value;
+
+        if (!empName) {
+          openAlert("Name required", "Please enter a name to lock this seat.");
+          empNameInput.focus();
+          return null;
+        }
+
+        if (!start || !end) {
+          openAlert("Invalid Time", "Please select both start and end time.");
+          return null;
+        }
+
+        const startMin = timeStrToMinutes(start);
+        const endMin = timeStrToMinutes(end);
+        if (endMin <= startMin) {
+          openAlert("Invalid Time Range", "End time must be later than start time.");
+          return null;
+        }
+
+        const seatNumber = currentDetailsSeat;
+        const overlap = bookings.some((b) => {
+          if (b.seatNumber !== seatNumber) return false;
+          const bs = timeStrToMinutes(b.start);
+          const be = timeStrToMinutes(b.end);
+          return rangesOverlap(startMin, endMin, bs, be);
+        });
+
+        if (overlap) {
+          openAlert("Overlap Detected", "This seat is already locked for an overlapping time slot.");
+          return null;
+        }
+
+        return { empName, start, end };
+      }
+
+      function lockSeat(seatNumber, bookingData) {
+        if (seatNumber < 1 || seatNumber > TOTAL_SEATS) return;
+        if (!bookingData) return;
+
+        bookings.push({
+          seatNumber,
+          empName: bookingData.empName,
+          start: bookingData.start,
+          end: bookingData.end,
+          checkedIn: false,
+          bookingStatus: "Manual", // NEW default for manual locks
+        });
+
+        saveState();
+        updateSeatUI(seatNumber);
+        updateStats();
+        if (currentDetailsSeat === seatNumber) showDetailsPanel(seatNumber);
+      }
+
+      function unlockSeatForCurrentView(seatNumber) {
+        if (seatNumber < 1 || seatNumber > TOTAL_SEATS) return;
+        const viewStart = timeStrToMinutes(viewStartTime);
+        const viewEnd = timeStrToMinutes(viewEndTime);
+
+        bookings = bookings.filter((b) => {
+          if (b.seatNumber !== seatNumber) return true;
+          const bs = timeStrToMinutes(b.start);
+          const be = timeStrToMinutes(b.end);
+          return !rangesOverlap(viewStart, viewEnd, bs, be);
+        });
+
+        saveState();
+        updateSeatUI(seatNumber);
+        updateStats();
+        if (currentDetailsSeat === seatNumber) showDetailsPanel(seatNumber);
+      }
+
+      // Check-in toggle
+      checkInSeatBtn.addEventListener("click", () => {
+        if (!currentDetailsSeat || !currentSeatBookings.length) return;
+        const booking = currentSeatBookings[currentSeatBookingIndex];
+        booking.checkedIn = !booking.checkedIn;
+        saveState();
+        updateSeatUI(currentDetailsSeat);
+        renderSeatDetails();
+        openAlert(
+          booking.checkedIn ? "Success" : "Reverted",
+          booking.checkedIn ? "Seat checked in successfully" : "Seat check-in revoked"
+        );
+      });
+
+      // Booking navigation + swipe
+      bookingPrevBtn.addEventListener("click", () => {
+        if (!currentSeatBookings.length) return;
+        currentSeatBookingIndex =
+          (currentSeatBookingIndex - 1 + currentSeatBookings.length) %
+          currentSeatBookings.length;
+        renderSeatDetails();
+      });
+
+      bookingNextBtn.addEventListener("click", () => {
+        if (!currentSeatBookings.length) return;
+        currentSeatBookingIndex =
+          (currentSeatBookingIndex + 1) % currentSeatBookings.length;
+        renderSeatDetails();
+      });
+
+      seatDetailsPanel.addEventListener("touchstart", (e) => {
+        if (!e.touches || !e.touches.length) return;
+        touchStartX = e.touches[0].clientX;
+      });
+
+      seatDetailsPanel.addEventListener("touchend", (e) => {
+        if (touchStartX === null || !e.changedTouches || !e.changedTouches.length) return;
+        const endX = e.changedTouches[0].clientX;
+        const diff = endX - touchStartX;
+        if (Math.abs(diff) > 40 && currentSeatBookings.length > 1) {
+          if (diff < 0) {
+            currentSeatBookingIndex =
+              (currentSeatBookingIndex + 1) % currentSeatBookings.length;
+          } else {
+            currentSeatBookingIndex =
+              (currentSeatBookingIndex - 1 + currentSeatBookings.length) %
+              currentSeatBookings.length;
+          }
+          renderSeatDetails();
+        }
+        touchStartX = null;
+      });
+
+      // Search
+      function parseSeatNumberFromInput() {
+        const raw = seatSearchInput.value.trim();
+        const num = Number(raw);
+        if (!raw || Number.isNaN(num)) return null;
+        if (num < 1 || num > TOTAL_SEATS) return null;
+        return num;
+      }
+
+      function handleSearch() {
+        const seatNum = parseSeatNumberFromInput();
+        if (!seatNum) {
+          seatSearchInput.focus();
+          seatSearchInput.classList.add("input-error");
+          seatDetailsSubtitle.textContent =
+            "Enter a seat number between 1 and " + TOTAL_SEATS + ".";
+          setTimeout(() => seatSearchInput.classList.remove("input-error"), 1000);
+          return;
+        }
+        focusSeat(seatNum);
+        showDetailsPanel(seatNum);
+      }
+
+      // PDF helpers
+      function showPdfPreview(url) {
+        pdfPreviewFrame.src = url;
+        pdfPreviewSection.classList.remove("hidden");
+        pdfPreviewSection.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+      function hidePdfPreview() {
+        pdfPreviewFrame.src = "";
+        pdfPreviewSection.classList.add("hidden");
+      }
+
+      async function generatePdf(mode = "download") {
+        const jsPdfLib = window.jspdf;
+        if (!jsPdfLib || !jsPdfLib.jsPDF) {
+          openAlert("PDF Error", "jsPDF failed to load. Please check your internet connection.");
+          return;
+        }
+
+        const { jsPDF } = jsPdfLib;
+        const doc = new jsPDF("p", "pt", "a4");
+
+        const marginLeft = 30;
+        const marginTop = 40;
+        const seatSize = 18;
+        const cols = GRID_COLUMNS;
+        const totalSeats = TOTAL_SEATS;
+        const occupiedSet = getOccupiedSeatSetForView();
+        const checkedInSet = getCheckedInSeatSetForView();
+
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(14);
+        doc.setTextColor(230, 232, 240);
+        doc.text("SEAT CHECKER – Seat Grid", marginLeft, 24);
+
+        doc.setFontSize(6);
+        for (let i = 1; i <= totalSeats; i++) {
+          const index = i - 1;
+          const row = Math.floor(index / cols);
+          const col = index % cols;
+
+          const x = marginLeft + col * seatSize;
+          const y = marginTop + row * seatSize;
+
+          const occupied = occupiedSet.has(i);
+          const checked = checkedInSet.has(i);
+
+          if (checked) {
+            doc.setFillColor(34, 197, 94);
+            doc.setTextColor(255, 255, 255);
+          } else if (occupied) {
+            doc.setFillColor(139, 92, 246);
+            doc.setTextColor(255, 255, 255);
+          } else {
+            doc.setFillColor(255, 255, 255);
+            doc.setTextColor(31, 41, 55);
+          }
+          doc.setDrawColor(148, 163, 184);
+
+          doc.roundedRect(x, y, seatSize - 3, seatSize - 3, 3, 3, "FD");
+          const textX = x + (seatSize - 3) / 2;
+          const textY = y + (seatSize - 3) / 2 + 1;
+          doc.text(String(i), textX, textY, { align: "center", baseline: "middle" });
+        }
+
+        doc.setFontSize(9);
+        doc.setTextColor(200, 210, 230);
+        const legendY = marginTop + seatSize * Math.ceil(totalSeats / cols) + 20;
+        doc.text("Legend:", marginLeft, legendY);
+
+        doc.setFillColor(255, 255, 255);
+        doc.setDrawColor(148, 163, 184);
+        doc.rect(marginLeft + 46, legendY - 8, 10, 10, "FD");
+        doc.text("Available", marginLeft + 60, legendY);
+
+        doc.setFillColor(139, 92, 246);
+        doc.rect(marginLeft + 124, legendY - 8, 10, 10, "FD");
+        doc.text("Occupied", marginLeft + 138, legendY);
+
+        doc.setFillColor(34, 197, 94);
+        doc.rect(marginLeft + 202, legendY - 8, 10, 10, "FD");
+        doc.text("Checked-in", marginLeft + 216, legendY);
+
+        doc.addPage();
+        doc.setFontSize(16);
+        doc.setTextColor(230, 232, 240);
+        doc.text("SEAT CHECKER – Summary", 40, 60);
+
+        const total = TOTAL_SEATS;
+        const occupied = occupiedSet.size;
+        const available = total - occupied;
+        const now = new Date();
+        const dateStr = now.toLocaleDateString("en-GB");
+        const timeStr = now.toLocaleTimeString("en-GB", {
+          hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
+        });
+
+        doc.setFontSize(12);
+        doc.setTextColor(209, 213, 219);
+
+        const summaryLines = [
+          "Total seats: " + total,
+          "Number of occupied seats (for " + viewStartTime + "–" + viewEndTime + "): " + occupied,
+          "Number of unoccupied seats (for " + viewStartTime + "–" + viewEndTime + "): " + available,
+          "Current view window: " + viewStartTime + "–" + viewEndTime,
+          "Generated on: " + dateStr,
+          "At time: " + timeStr,
+        ];
+
+        let y = 100;
+        summaryLines.forEach((line) => { doc.text(line, 40, y); y += 18; });
+
+        const sortedBookings = bookings
+          .slice()
+          .sort((a, b) => {
+            if (a.seatNumber !== b.seatNumber) return a.seatNumber - b.seatNumber;
+            return timeStrToMinutes(a.start) - timeStrToMinutes(b.start);
+          });
+
+        doc.addPage();
+        doc.setFontSize(16);
+        doc.setTextColor(230, 232, 240);
+        doc.text("SEAT CHECKER – Bookings Table", 40, 50);
+
+        doc.setFontSize(11);
+        doc.setTextColor(180, 190, 200);
+        doc.text("Columns: SEAT NO, NAME, TIME (booking slot)", 40, 70);
+
+        const tableStartX = 40;
+        const tableStartY = 100;
+        const rowHeight = 18;
+        const colSeatWidth = 80;
+        const colNameWidth = 150;
+        const colTimeWidth = 150;
+        const pageBottomY = 780;
+
+        function drawTableHeader(startY) {
+          doc.setFontSize(11);
+          doc.setTextColor(255, 255, 255);
+          doc.setFillColor(30, 64, 175);
+          doc.rect(tableStartX, startY - 12, colSeatWidth, 20, "F");
+          doc.rect(tableStartX + colSeatWidth, startY - 12, colNameWidth, 20, "F");
+          doc.rect(tableStartX + colSeatWidth + colNameWidth, startY - 12, colTimeWidth, 20, "F");
+          doc.text("SEAT NO", tableStartX + 6, startY);
+          doc.text("NAME", tableStartX + colSeatWidth + 6, startY);
+          doc.text("TIME", tableStartX + colSeatWidth + colNameWidth + 6, startY);
+        }
+
+        let currentY = tableStartY;
+        drawTableHeader(currentY);
+        currentY += rowHeight;
+        doc.setFontSize(10);
+        doc.setTextColor(15, 23, 42);
+
+        if (sortedBookings.length === 0) {
+          doc.text("No bookings available.", tableStartX, currentY);
+        } else {
+          sortedBookings.forEach((b) => {
+            if (currentY > pageBottomY) {
+              doc.addPage();
+              currentY = 80;
+              drawTableHeader(currentY);
+              currentY += rowHeight;
+              doc.setFontSize(10);
+              doc.setTextColor(15, 23, 42);
+            }
+            const seatText = String(b.seatNumber);
+            const nameText = b.empName || "-";
+            const timeText = (b.start || "--:--") + " – " + (b.end || "--:--");
+            doc.text(seatText, tableStartX + 6, currentY);
+            doc.text(nameText, tableStartX + colSeatWidth + 6, currentY);
+            doc.text(timeText, tableStartX + colSeatWidth + colNameWidth + 6, currentY);
+            currentY += rowHeight;
+          });
+        }
+
+        if (mode === "view") {
+          const blob = doc.output("blob");
+          const url = URL.createObjectURL(blob);
+          showPdfPreview(url);
+        } else {
+          doc.save("seat-checker.pdf");
+        }
+      }
+
+      function handleResetAll() {
+        openConfirm({
+          title: "Reset all seats?",
+          text: "This will remove all bookings and mark all seats as available for all time slots.",
+          onConfirm: () => {
+            bookings = [];
+            refreshAllSeatsUI();
+            updateStats();
+            saveState();
+            hideDetailsPanel();
+            hidePdfPreview();
+          },
+        });
+      }
+
+      function handleViewTimeChange() {
+        const start = viewStartInput.value || "08:00";
+        const end = viewEndInput.value || "09:00";
+        if (timeStrToMinutes(end) <= timeStrToMinutes(start)) {
+          openAlert("Invalid Time Range", "View 'To' time must be later than 'From' time.");
+          viewStartInput.value = viewStartTime;
+          viewEndInput.value = viewEndTime;
+          return;
+        }
+        viewStartTime = start;
+        viewEndTime = end;
+        refreshAllSeatsUI();
+        updateStats();
+        if (currentDetailsSeat) showDetailsPanel(currentDetailsSeat);
+      }
+
+      function handleStatusFilterChange() {
+        statusFilter = statusFilterSelect.value;
+        refreshAllSeatsUI();
+      }
+
+      // Excel helpers
+      function formatTimeToHHMM(hours, minutes) {
+        const h = String(hours).padStart(2, "0");
+        const m = String(minutes).padStart(2, "0");
+        return `${h}:${m}`;
+      }
+
+      function normalizeTimeCell(cell) {
+        if (cell === null || cell === undefined || cell === "") return "";
+        if (cell instanceof Date) return formatTimeToHHMM(cell.getHours(), cell.getMinutes());
+        const str = String(cell).trim();
+        if (!str) return "";
+
+        const parts = str.split(":");
+        if (parts.length >= 2) {
+          const h = parseInt(parts[0], 10);
+          const m = parseInt(parts[1], 10) || 0;
+          if (Number.isNaN(h) || h < 0 || h > 23) return "";
+          if (Number.isNaN(m) || m < 0 || m > 59) return "";
+          return formatTimeToHHMM(h, m);
+        }
+
+        const num = Number(str);
+        if (!Number.isNaN(num) && num > 0 && num < 1) {
+          const totalMinutes = Math.round(num * 24 * 60);
+          const hours = Math.floor(totalMinutes / 60);
+          const minutes = totalMinutes % 60;
+          return formatTimeToHHMM(hours, minutes);
+        }
+
+        return "";
+      }
+
+      function handleExcelUpload(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        if (typeof XLSX === "undefined") {
+          openAlert("Excel Error", "XLSX library failed to load.");
+          return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = function (e) {
+          try {
+            const data = new Uint8Array(e.target.result);
+            const workbook = XLSX.read(data, { type: "array" });
+
+            const sheetName = "Details report";
+            const sheet = workbook.Sheets[sheetName];
+            if (!sheet) {
+              openAlert("Excel Error", 'Sheet "Details report" not found in the uploaded file.');
+              return;
+            }
+
+            const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+            if (!rows || rows.length < 2) {
+              openAlert("Excel Error", 'Sheet "Details report" seems empty or has no data rows.');
+              return;
+            }
+
+            const header = rows[0].map((h) => String(h || "").trim());
+            const dataRows = rows.slice(1);
+
+            function findColumn(headerArr, names) {
+              for (let n of names) {
+                const idx = headerArr.findIndex(
+                  (h) => h && h.toLowerCase() === n.toLowerCase()
+                );
+                if (idx !== -1) return idx;
+              }
+              return -1;
+            }
+
+            // NEW: bookingStatus column
+            const colIndex = {
+              enterpriseId: findColumn(header, ["ENTERPRISE ID", "Enterprise ID"]),
+              workstation: findColumn(header, ["WORKSTATION #", "WORKSTATION#", "Workstation #"]),
+              startTime: findColumn(header, ["START TIME", "Start Time", "START_TIME"]),
+              endTime: findColumn(header, ["END TIME", "End Time", "END_TIME"]),
+              facility: findColumn(header, ["FACILITY", "Facility"]),
+              bookingStatus: findColumn(header, ["BOOKING STATUS", "Booking Status", "BOOKING_STATUS", "STATUS"]),
+            };
+
+            if (
+              colIndex.enterpriseId === -1 ||
+              colIndex.workstation === -1 ||
+              colIndex.startTime === -1 ||
+              colIndex.endTime === -1 ||
+              colIndex.facility === -1 ||
+              colIndex.bookingStatus === -1
+            ) {
+              openAlert(
+                "Excel Format Error",
+                'Columns ENTERPRISE ID, WORKSTATION #, START TIME, END TIME, FACILITY, and BOOKING STATUS are required in "Details report".'
+              );
+              console.log("Header row:", header);
+              console.log("Column indexes:", colIndex);
+              return;
+            }
+
+            const imported = [];
+            let minStart = null;
+            let maxEnd = null;
+            let skippedStatus = 0;
+
+            dataRows.forEach((row) => {
+              if (!row || row.length === 0) return;
+
+              const facilityVal = String(row[colIndex.facility] ?? "").trim().toUpperCase();
+              if (facilityVal !== "CODC") return;
+
+              // NEW: Only Successful booking status
+              const statusValRaw = String(row[colIndex.bookingStatus] ?? "").trim();
+              const statusNorm = statusValRaw.toLowerCase();
+              if (statusNorm !== "successful") {
+                skippedStatus++;
+                return;
+              }
+
+              const workstationVal = String(row[colIndex.workstation] ?? "").trim();
+              if (!workstationVal) return;
+
+              const wsParts = workstationVal.split(".");
+              const lastSegment = wsParts[wsParts.length - 1] || "";
+              const numericSegment = lastSegment.replace(/\D/g, "");
+              if (!numericSegment) return;
+
+              const threeDigit = numericSegment.slice(-3);
+              const seatNumber = parseInt(threeDigit, 10);
+              if (!seatNumber || seatNumber < 1 || seatNumber > TOTAL_SEATS) return;
+
+              const nameCell = row[colIndex.enterpriseId];
+              const empNameVal = nameCell instanceof Date ? "" : String(nameCell ?? "").trim();
+
+              const startRaw = row[colIndex.startTime];
+              const endRaw = row[colIndex.endTime];
+              const start = normalizeTimeCell(startRaw);
+              const end = normalizeTimeCell(endRaw);
+              if (!start || !end) return;
+
+              const sMin = timeStrToMinutes(start);
+              const eMin = timeStrToMinutes(end);
+              if (eMin <= sMin) return;
+
+              imported.push({
+                seatNumber,
+                empName: empNameVal,
+                start,
+                end,
+                checkedIn: false,
+                bookingStatus: statusValRaw || "Successful", // NEW
+              });
+
+              if (minStart === null || sMin < minStart) minStart = sMin;
+              if (maxEnd === null || eMin > maxEnd) maxEnd = eMin;
+            });
+
+            bookings = imported;
+            saveState();
+
+            if (minStart !== null && maxEnd !== null && minStart < maxEnd) {
+              const pad = (n) => (n < 10 ? "0" + n : String(n));
+              const minH = Math.floor(minStart / 60);
+              const minM = minStart % 60;
+              const maxH = Math.floor(maxEnd / 60);
+              const maxM = maxEnd % 60;
+              viewStartTime = `${pad(minH)}:${pad(minM)}`;
+              viewEndTime = `${pad(maxH)}:${pad(maxM)}`;
+              viewStartInput.value = viewStartTime;
+              viewEndInput.value = viewEndTime;
+            }
+
+            refreshAllSeatsUI();
+            updateStats();
+            hideDetailsPanel();
+            hidePdfPreview();
+
+            openAlert(
+              "Excel Imported",
+              `Imported ${imported.length} CODC bookings with BOOKING STATUS="Successful".` +
+              (skippedStatus ? ` Skipped ${skippedStatus} non-successful rows.` : "")
+            );
+          } catch (err) {
+            console.error("Error reading Excel:", err);
+            openAlert("Excel Error", "Failed to read Excel. Please check the file format and try again.");
+          }
+        };
+
+        reader.onerror = function (err) {
+          console.error("FileReader error:", err);
+          openAlert("Excel Error", "Failed to read the file. Please try again with a valid .xlsb file.");
+        };
+
+        reader.readAsArrayBuffer(file);
+      }
+
+      // Events wiring
+      searchBtn.addEventListener("click", handleSearch);
+      seatSearchInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") handleSearch();
+      });
+
+      lockSeatBtn.addEventListener("click", () => {
+        if (!currentDetailsSeat) return;
+        openBookingModal(currentDetailsSeat);
+      });
+
+      unlockSeatBtn.addEventListener("click", () => {
+        if (!currentDetailsSeat) return;
+        const seatNumber = currentDetailsSeat;
+        openConfirm({
+          title: "Unlock Seat " + seatNumber + "?",
+          text:
+            "This will remove bookings for seat " +
+            seatNumber +
+            " overlapping the current time window (" +
+            viewStartTime +
+            "–" +
+            viewEndTime +
+            ").",
+          onConfirm: () => unlockSeatForCurrentView(seatNumber),
+        });
+      });
+
+      backToGridBtn.addEventListener("click", hideDetailsPanel);
+
+      confirmNo.addEventListener("click", closeConfirm);
+      confirmModal.addEventListener("click", (e) => {
+        if (e.target === confirmModal || e.target.classList.contains("modal-backdrop")) {
+          closeConfirm();
+        }
+      });
+      confirmYes.addEventListener("click", () => {
+        if (typeof confirmAction === "function") confirmAction();
+        closeConfirm();
+      });
+
+      downloadPdfBtn.addEventListener("click", () => generatePdf("download"));
+      viewPdfBtn.addEventListener("click", () => generatePdf("view"));
+      resetAllBtn.addEventListener("click", handleResetAll);
+
+      bookingCancelBtn.addEventListener("click", closeBookingModal);
+      bookingModal.addEventListener("click", (e) => {
+        if (e.target === bookingModal || e.target.classList.contains("modal-backdrop")) {
+          closeBookingModal();
+        }
+      });
+
+      bookingSaveBtn.addEventListener("click", () => {
+        const data = validateBookingForm();
+        if (!data) return;
+        const seatNumber = currentDetailsSeat;
+        lockSeat(seatNumber, data);
+        closeBookingModal();
+      });
+
+      viewStartInput.addEventListener("change", handleViewTimeChange);
+      viewEndInput.addEventListener("change", handleViewTimeChange);
+      statusFilterSelect.addEventListener("change", handleStatusFilterChange);
+
+      closePdfPreviewBtn.addEventListener("click", hidePdfPreview);
+      excelFileInput.addEventListener("change", handleExcelUpload);
+
+      // Init
+      loadState();
+      buildGrid();
+      refreshAllSeatsUI();
+      updateStats();
+    })();
+  </script>
+</body>
+</html>
